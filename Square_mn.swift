@@ -7,16 +7,51 @@ struct Square_mn: View {
     @State private var ymove:[[Int]]=Array(repeating: Array(repeating: 0, count: 11), count: 11)
     @State private var xoffset:Int=0
     @State private var yoffset:Int=0
-    /*init(m:Binding<Int>,n:Binding<Int>){
-        
-    }*/
-    /*init(m:Binding<Int>,n:Binding<Int>){
-        self._m=m
-        self._n=n
-        board=Array(repeating: Array(repeating: 0, count: n), count: _m)
-    }*/
-    func dfs(x:Int,y:Int,tar:Int){
-        board[x][y] = 88 // 待消去
+    @State private var totalCombo:Int=0
+    @State private var score:Int=0
+    @State private var eliminateSum:Int=0
+    @State private var lock:Int=0
+    
+    func eliminate(){//消除
+        var move:Int=0
+        Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true){
+            t in
+            for i in(0..<10){//最上層不做
+                for j in(0..<11){
+                    if board[10-i][j] < 0 && board[10-i-1][j] != 0{
+                        var k:Int=1
+                        while board[10-i-k][j] == 0 && 10-i-k >= 0{
+                            k += 1
+                        }
+                        if 10-i-k >= 0{
+                            (board[10-i][j],board[10-i-k][j])=(board[10-i-k][j],board[10-i][j])
+                        }
+                    }
+                }
+            }
+            var cnt:Int=0
+            for i in(0..<11){
+                var k:Int=0
+                while board[k][i] == 0 && k < 10{//找從上往下數第一格合法的格子
+                    k += 1
+                    cnt += 1
+                }
+                if board[k][i] < 0{
+                    board[k][i] = Int.random(in: 1..<5)
+                    eliminateSum += 1
+                }
+            }
+            move += 1
+            if move >= 11{
+                if check() != 0{
+                    eliminate()
+                }
+                t.invalidate()
+            }
+        }
+    }
+    func dfs(x:Int,y:Int,tar:Int){//標記２
+        board[x][y] *= -1 // 待消去
         if board[x][y+1] == tar{
             dfs(x:x,y:y+1,tar:tar)
         }
@@ -30,39 +65,48 @@ struct Square_mn: View {
             dfs(x:x-1,y:y,tar:tar)
         }
     }
-    func check(){//1,2,3,4 11,12,13,14(1,2,3,4消除）
+    func check() -> Int {//1,2,3,4 11,12,13,14(1,2,3,4消除） 標記１
         for i in(0..<11){
             for j in(0..<11){
-                var k=0,p=0
-                while board[i][j+k]%10 == board[i][j]%10 {
-                    k += 1
-                }
-                while board[i+p][j]%10 == board[i][j]%10 {
-                    p += 1
-                }
-                if k>=3 { //0 1 2三消
-                    for q in(0..<k){
-                        board[i][j] = board[i][j+q]%10 + 10
+                if board[i][j] != 0{
+                    var k=0,p=0
+                    while j+k < 11 && board[i][j+k]%10 == board[i][j]%10 {
+                        k += 1
                     }
-                }
-                if p>=3 { //0 1 2三消
-                    for q in(0..<p){
-                        board[i][j] = board[i+q][j]%10 + 10
+                    while i+p < 11 && board[i+p][j]%10 == board[i][j]%10 {
+                        p += 1
+                    }
+                    if k>=3 { //0 1 2三消
+                        for q in(0..<k){
+                            board[i][j+q] = board[i][j+q]%10 + 10
+                        }
+                    }
+                    if p>=3 { //0 1 2三消
+                        for q in(0..<p){
+                            board[i+q][j] = board[i+q][j]%10 + 10
+                        }
                     }
                 }
             }
         }
+        var combo:Int=0
         for i in(0..<11){
             for j in(0..<11){
                 if board[i][j]>10{
                     dfs(x:i,y:j,tar:board[i][j])
+                    combo += 1
                 }
             }
         }
+        totalCombo += combo
+        return combo
+    }
+    func sw(x1:Int,y1:Int,x2:Int,y2:Int){//swap
+        (board[x1][y1],board[x2][y2])=(board[x2][y2],board[x1][y1])
     }
     var body: some View {
         VStack(spacing:0){
-            Text("level 1").onAppear{
+            Text("Score :\(score) Combo :\(totalCombo) \(eliminateSum)").onAppear{
                 board=Array(repeating: Array(repeating: 0, count: n+2), count: m+2)
                 for i in(1..<m+1){
                     for j in(1..<n+1){
@@ -87,46 +131,105 @@ struct Square_mn: View {
                                         .onEnded({value in 
                                             if abs(xoffset)>abs(yoffset){
                                                 if xoffset>0 && board[i][j+1] != 0{
-                                                    //(board[i][j],board[i][j+1])=(board[i][j+1],board[i][j])
-                                                    xmove[i][j] += 50
-                                                    xmove[i][j+1] -= 50
-                                                    Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false){
-                                                        t in
-                                                        xmove[i][j] -= 50
-                                                        xmove[i][j+1] += 50
+                                                    sw(x1:i,y1:j,x2:i,y2:j+1)
+                                                    if check() == 0{
+                                                        sw(x1:i,y1:j,x2:i,y2:j+1)
+                                                        xmove[i][j] += 50
+                                                        xmove[i][j+1] -= 50
+                                                        Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false){
+                                                            t in
+                                                            xmove[i][j] -= 50
+                                                            xmove[i][j+1] += 50
+                                                        }
                                                     }
-                                                    
+                                                    else{
+                                                        sw(x1:i,y1:j,x2:i,y2:j+1)
+                                                        xmove[i][j] += 50
+                                                        xmove[i][j+1] -= 50
+                                                        Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false){
+                                                            t in
+                                                            eliminate()
+                                                            xmove[i][j] -= 50
+                                                            xmove[i][j+1] += 50
+                                                            sw(x1:i,y1:j,x2:i,y2:j+1)
+                                                        }
+                                                    }
                                                 }
                                                 else if board[i][j-1] != 0{
-                                                    //(board[i][j],board[i][j-1])=(board[i][j-1],board[i][j])
-                                                    xmove[i][j] -= 50
-                                                    xmove[i][j-1] += 50
-                                                    Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false){
-                                                        t in
-                                                        xmove[i][j] += 50
-                                                        xmove[i][j-1] -= 50
+                                                    sw(x1:i,y1:j,x2:i,y2:j-1)
+                                                    if check() == 0{
+                                                        sw(x1:i,y1:j,x2:i,y2:j-1)
+                                                        xmove[i][j] -= 50
+                                                        xmove[i][j-1] += 50
+                                                        Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false){
+                                                            t in
+                                                            xmove[i][j] += 50
+                                                            xmove[i][j-1] -= 50
+                                                        }
+                                                    }
+                                                    else{
+                                                        sw(x1:i,y1:j,x2:i,y2:j-1)
+                                                        xmove[i][j] -= 50
+                                                        xmove[i][j-1] += 50
+                                                        Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false){
+                                                            t in
+                                                            eliminate()
+                                                            xmove[i][j] += 50
+                                                            xmove[i][j-1] -= 50
+                                                            sw(x1:i,y1:j,x2:i,y2:j-1)
+                                                        }
                                                     }
                                                 }
                                             }
                                             else{
                                                 if yoffset>0{
-                                                    //(board[i][j],board[i+1][j])=(board[i+1][j],board[i][j])
-                                                    ymove[i][j] += 50
-                                                    ymove[i+1][j] -= 50
-                                                    Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false){
-                                                        t in
-                                                        ymove[i][j] -= 50
-                                                        ymove[i+1][j] += 50
+                                                    sw(x1:i,y1:j,x2:i+1,y2:j)
+                                                    if check() == 0{
+                                                        sw(x1:i,y1:j,x2:i+1,y2:j)
+                                                        ymove[i][j] += 50
+                                                        ymove[i+1][j] -= 50
+                                                        Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false){
+                                                            t in
+                                                            ymove[i][j] -= 50
+                                                            ymove[i+1][j] += 50
+                                                        }
+                                                    }
+                                                    else{
+                                                        sw(x1:i,y1:j,x2:i+1,y2:j)
+                                                        ymove[i][j] += 50
+                                                        ymove[i+1][j] -= 50
+                                                        Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false){
+                                                            t in
+                                                            eliminate()
+                                                            ymove[i][j] -= 50
+                                                            ymove[i+1][j] += 50
+                                                            sw(x1:i,y1:j,x2:i+1,y2:j)
+                                                        }
                                                     }
                                                 }
                                                 else if board[i-1][j] != 0{
-                                                    //(board[i][j],board[i-1][j])=(board[i-1][j],board[i][j])
-                                                    ymove[i][j] -= 50
-                                                    ymove[i-1][j] += 50
-                                                    Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false){
-                                                        t in
-                                                        ymove[i][j] += 50
-                                                        ymove[i-1][j] -= 50
+                                                    sw(x1:i,y1:j,x2:i-1,y2:j)
+                                                    if check() == 0{
+                                                        sw(x1:i,y1:j,x2:i-1,y2:j)
+                                                        ymove[i][j] -= 50
+                                                        ymove[i-1][j] += 50
+                                                        Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false){
+                                                            t in
+                                                            ymove[i][j] += 50
+                                                            ymove[i-1][j] -= 50
+                                                        }
+                                                    }
+                                                    else{
+                                                        sw(x1:i,y1:j,x2:i-1,y2:j)
+                                                        ymove[i][j] -= 50
+                                                        ymove[i-1][j] += 50
+                                                        Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false){
+                                                            t in
+                                                            eliminate()
+                                                            ymove[i][j] += 50
+                                                            ymove[i-1][j] -= 50
+                                                            sw(x1:i,y1:j,x2:i-1,y2:j)
+                                                        }
                                                     }
                                                 }
                                             }
@@ -134,15 +237,15 @@ struct Square_mn: View {
                                             yoffset = 0
                                         })
                                 )
-                        
-                                Text("\(board[i][j])")
-                                            .offset(x:CGFloat(xmove[i][j]),y:CGFloat(ymove[i][j]))
-                                            .animation(.default)
+                            Image((board[i][j] < 0 ? "\(-board[i][j])" : "\(board[i][j] % 10)"))
+                                .resizable()
+                                .frame(width:40,height:40)
+                                .opacity((board[i][j] < 0 ? 0 : 1))
+                                .offset(x:CGFloat(xmove[i][j]),y:CGFloat(ymove[i][j]))
+                                .animation(.default)
                             //.animation(.easeIn,value:CGFloat(xmove[i][j]))
                             //.animation(.easeIn,value:CGFloat(ymove[i][j]))
-                                            
                         }
-                        
                     }
                 }
             }
