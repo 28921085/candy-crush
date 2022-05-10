@@ -3,15 +3,22 @@ struct Square_mn: View {
     @Binding var m:Int
     @Binding var n:Int
     @Binding var board:[[Int]]//0=邊界或無效的格子
-    @State private var xmove:[[Int]]=Array(repeating: Array(repeating: 0, count: 11), count: 11)
-    @State private var ymove:[[Int]]=Array(repeating: Array(repeating: 0, count: 11), count: 11)
+    @Binding var level:Int
+    @State private var xmove:[[Int]]=Array(repeating: Array(repeating: 0, count: 15), count: 15)
+    @State private var ymove:[[Int]]=Array(repeating: Array(repeating: 0, count: 15), count: 15)
     @State private var xoffset:Int=0
     @State private var yoffset:Int=0
     @State private var totalCombo:Int=0
     @State private var score:Int=0
     @State private var eliminateSum:Int=0
     @State private var lock:Int=0
-    func moveFinish()->Int{//判斷是否移動結束
+    @State private var highScore:Int=0
+    @State private var leftTime:Double=60.0
+    @State private var gameEnd:Int=0
+    @State private var hintRecord:[[Int]]=Array(repeating: Array(repeating: 0, count: 15), count: 15)
+    @State private var hintEmoji:[String]=["👉","👈","👇","👆"]
+    @State private var debug:String=""
+    func moveFinish()->Int{//判斷消除是否結束
         for i in(0..<15){
             for j in(0..<15){
                 if board[i][j] < 0{
@@ -19,6 +26,7 @@ struct Square_mn: View {
                 }
             }
         }
+        lock = 0
         return 1
     }
     func eliminate(){//消除
@@ -26,13 +34,13 @@ struct Square_mn: View {
             t in
             for i in(0..<14){//最上層不做
                 for j in(0..<15){
-                    if board[10-i][j] < 0 && board[10-i-1][j] != 0{
+                    if board[14-i][j] < 0/* && board[14-i-1][j] != 0*/{
                         var k:Int=1
-                        while board[10-i-k][j] == 0 && 10-i-k >= 0{
+                        while board[14-i-k][j] == 0 && 14-i-k > 0{
                             k += 1
                         }
-                        if 10-i-k >= 0{
-                            sw(x1: 10-i, y1: j, x2: 10-i-k, y2: j)
+                        if 14-i-k > 0{
+                            sw(x1: 14-i, y1: j, x2: 14-i-k, y2: j)
                         }
                     }
                 }
@@ -61,6 +69,78 @@ struct Square_mn: View {
                 }
                 t.invalidate()
             }
+        }
+    }
+    func removeHint(){
+        for i in(0..<15){
+            for j in(0..<15){
+                hintRecord[i][j]=0
+            }
+        }
+    }
+    func ctrlz(){
+        for i in(0..<15){
+            for j in(0..<15){
+                if board[i][j] < 0{
+                    board[i][j] *= -1
+                }
+                if board[i][j] > 10{
+                    board[i][j] -= 10
+                }
+            }
+        }
+    }
+    func hint()->Int{
+        for i in(0..<15){
+            for j in(0..<15){
+                if board[i][j] != 0{
+                    if board[i][j+1] != 0{//1=right
+                        sw(x1: i, y1: j, x2: i, y2: j+1)
+                        if check() != 0{
+                            ctrlz()
+                            hintRecord[i][j]=1
+                            sw(x1: i, y1: j, x2: i, y2: j+1)
+                            return 1
+                        }
+                    }
+                    if board[i][j-1] != 0{//2=left
+                        
+                    }
+                    if board[i+1][j] != 0{//down
+                        
+                    }
+                    if board[i-1][j] != 0{//up
+                        
+                    }
+                }
+            }
+        }
+        return 0
+    }
+    func reGenerate(){//no sloution
+        for i in(0..<15){
+            for j in(0..<15){
+                if board[i][j] != 0{
+                    board[i][j] = Int.random(in: 1..<5)
+                }
+            }
+        }
+        valid()
+        totalCombo = 0
+    }
+    func valid()->Int{
+        if check() > 0{
+            for i in(0..<15){
+                for j in(0..<15){
+                    if(board[i][j] < 0){
+                        board[i][j] = Int.random(in: (1..<5))
+                    }
+                }
+            }
+            return valid()
+        }
+        else{
+            return 0
         }
     }
     func dfs(x:Int,y:Int,tar:Int){//標記２
@@ -118,15 +198,37 @@ struct Square_mn: View {
         (board[x1][y1],board[x2][y2])=(board[x2][y2],board[x1][y1])
     }
     var body: some View {
+        Text("\(debug)")
         VStack(spacing:0){
+            Text("LEVEL \(level)   High Score : \(highScore)")
+            Text("⏰ : \(String(format: "%.1f", leftTime))").onAppear{
+                Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true){ t in
+                    leftTime -= 0.1
+                    if leftTime < 0.05{
+                        leftTime=0
+                        gameEnd=1
+                        t.invalidate()
+                    }
+                }
+            }
+            Rectangle()//timebar
+                .fill((leftTime > 30 ? Color.green : (leftTime > 10 ? Color.yellow : Color.red)))
+                .frame(width:CGFloat(UIScreen.main.bounds.width*leftTime/60.0),height:3)
+            Button{
+                level=0
+            }label:{
+                Text("Back")
+            }
             Text("Score :\(score) Combo :\(totalCombo)").onAppear{
-                for i in(1..<m+2){
+                /*for i in(1..<m+2){
                     for j in(1..<n+2){
                         if board[i][j] == 1{//init
                             board[i][j]=Int.random(in: (1..<5))
                         }
                     }
                 }
+                valid()*/
+                reGenerate()
             }
             ForEach (1..<m+1){
                 i in
@@ -258,9 +360,10 @@ struct Square_mn: View {
                                     .opacity((board[i][j] < 0 ? 0 : 1))
                                     .offset(x:CGFloat(xmove[i][j]),y:CGFloat(ymove[i][j]))
                                     .animation(.default)
+                                    .overlay(Text("\(board[i][j])"))
                                 //.animation(.easeIn,value:CGFloat(xmove[i][j]))
                                 //.animation(.easeIn,value:CGFloat(ymove[i][j]))
-                            
+                                //Text("\(board[i][j])")
                             } 
                             else {
                                 RoundedRectangle(cornerRadius: 5)
