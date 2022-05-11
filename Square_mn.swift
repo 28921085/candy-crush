@@ -4,20 +4,19 @@ struct Square_mn: View {
     @Binding var n:Int
     @Binding var board:[[Int]]//0=邊界或無效的格子
     @Binding var level:Int
+    @Binding var highScore:Int
     @State private var xmove:[[Int]]=Array(repeating: Array(repeating: 0, count: 15), count: 15)
     @State private var ymove:[[Int]]=Array(repeating: Array(repeating: 0, count: 15), count: 15)
     @State private var xoffset:Int=0
     @State private var yoffset:Int=0
-    @State private var totalCombo:Int=0
     @State private var score:Int=0
+    @State private var totalCombo:Int=0
     @State private var eliminateSum:Int=0
-    @State private var lock:Int=0
-    @State private var highScore:Int=0
     @State private var leftTime:Double=60.0
-    @State private var gameEnd:Int=0
+    @State private var gameEnd:Bool=false
     @State private var hintRecord:[[Int]]=Array(repeating: Array(repeating: 0, count: 15), count: 15)
-    @State private var hintEmoji:[String]=["👉","👈","👇","👆"]
-    @State private var debug:String=""
+    @State private var hintEmoji:[String]=["","👉","👈","👇","👆"]
+    @State private var hintTimer:Timer?
     func moveFinish()->Int{//判斷消除是否結束
         for i in(0..<15){
             for j in(0..<15){
@@ -26,12 +25,12 @@ struct Square_mn: View {
                 }
             }
         }
-        lock = 0
         return 1
     }
     func eliminate(){//消除
         Timer.scheduledTimer(withTimeInterval: 0.3, repeats: true){
             t in
+            hintTimer?.invalidate()
             for i in(0..<14){//最上層不做
                 for j in(0..<15){
                     if board[14-i][j] < 0/* && board[14-i-1][j] != 0*/{
@@ -59,6 +58,7 @@ struct Square_mn: View {
                 score += totalCombo * eliminateSum
                 eliminateSum = 0
                 if check() != 0{
+                    removeHint()
                     Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false){
                         t in
                         eliminate()
@@ -66,6 +66,17 @@ struct Square_mn: View {
                 }
                 else{
                     totalCombo=0
+                    if hint() == 0{
+                        removeHint()
+                        reGenerate()
+                    }
+                    else {
+                        removeHint()
+                        hintTimer?.invalidate()
+                        hintTimer=Timer.scheduledTimer(withTimeInterval: 3, repeats: false){ _ in
+                            hint()
+                        }
+                    }
                 }
                 t.invalidate()
             }
@@ -78,7 +89,7 @@ struct Square_mn: View {
             }
         }
     }
-    func ctrlz(){
+    func uncheck(){
         for i in(0..<15){
             for j in(0..<15){
                 if board[i][j] < 0{
@@ -97,20 +108,42 @@ struct Square_mn: View {
                     if board[i][j+1] != 0{//1=right
                         sw(x1: i, y1: j, x2: i, y2: j+1)
                         if check() != 0{
-                            ctrlz()
+                            uncheck()
                             hintRecord[i][j]=1
                             sw(x1: i, y1: j, x2: i, y2: j+1)
                             return 1
                         }
+                        sw(x1: i, y1: j, x2: i, y2: j+1)
                     }
                     if board[i][j-1] != 0{//2=left
-                        
+                        sw(x1: i, y1: j, x2: i, y2: j-1)
+                        if check() != 0{
+                            uncheck()
+                            hintRecord[i][j]=2
+                            sw(x1: i, y1: j, x2: i, y2: j-1)
+                            return 1
+                        }
+                        sw(x1: i, y1: j, x2: i, y2: j-1)
                     }
                     if board[i+1][j] != 0{//down
-                        
+                        sw(x1: i, y1: j, x2: i+1, y2: j)
+                        if check() != 0{
+                            uncheck()
+                            hintRecord[i][j]=3
+                            sw(x1: i, y1: j, x2: i+1, y2: j)
+                            return 1
+                        }
+                        sw(x1: i, y1: j, x2: i+1, y2: j)
                     }
                     if board[i-1][j] != 0{//up
-                        
+                        sw(x1: i, y1: j, x2: i-1, y2: j)
+                        if check() != 0{
+                            uncheck()
+                            hintRecord[i][j]=4
+                            sw(x1: i, y1: j, x2: i-1, y2: j)
+                            return 1
+                        }
+                        sw(x1: i, y1: j, x2: i-1, y2: j)
                     }
                 }
             }
@@ -118,6 +151,7 @@ struct Square_mn: View {
         return 0
     }
     func reGenerate(){//no sloution
+        removeHint()
         for i in(0..<15){
             for j in(0..<15){
                 if board[i][j] != 0{
@@ -127,6 +161,11 @@ struct Square_mn: View {
         }
         valid()
         totalCombo = 0
+        while hint() == 0{
+            removeHint()
+            reGenerate()
+        }
+        removeHint()
     }
     func valid()->Int{
         if check() > 0{
@@ -163,10 +202,10 @@ struct Square_mn: View {
             for j in(0..<15){
                 if board[i][j] != 0{
                     var k=0,p=0
-                    while j+k < 11 && board[i][j+k]%10 == board[i][j]%10 {
+                    while j+k < 15 && board[i][j+k]%10 == board[i][j]%10 {
                         k += 1
                     }
-                    while i+p < 11 && board[i+p][j]%10 == board[i][j]%10 {
+                    while i+p < 15 && board[i+p][j]%10 == board[i][j]%10 {
                         p += 1
                     }
                     if k>=3 { //0 1 2三消
@@ -198,15 +237,18 @@ struct Square_mn: View {
         (board[x1][y1],board[x2][y2])=(board[x2][y2],board[x1][y1])
     }
     var body: some View {
-        Text("\(debug)")
         VStack(spacing:0){
             Text("LEVEL \(level)   High Score : \(highScore)")
+                .alert("Times up",isPresented:$gameEnd,actions:{
+                    Button("OK"){}
+                })
             Text("⏰ : \(String(format: "%.1f", leftTime))").onAppear{
                 Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true){ t in
                     leftTime -= 0.1
                     if leftTime < 0.05{
                         leftTime=0
-                        gameEnd=1
+                        gameEnd=true
+                        highScore = max(highScore,score)
                         t.invalidate()
                     }
                 }
@@ -220,15 +262,10 @@ struct Square_mn: View {
                 Text("Back")
             }
             Text("Score :\(score) Combo :\(totalCombo)").onAppear{
-                /*for i in(1..<m+2){
-                    for j in(1..<n+2){
-                        if board[i][j] == 1{//init
-                            board[i][j]=Int.random(in: (1..<5))
-                        }
-                    }
-                }
-                valid()*/
                 reGenerate()
+                hintTimer=Timer.scheduledTimer(withTimeInterval: 3, repeats: false){_ in 
+                    hint()
+                }
             }
             ForEach (1..<m+1){
                 i in
@@ -246,6 +283,7 @@ struct Square_mn: View {
                                                 yoffset += Int(value.translation.height)
                                             })
                                             .onEnded({value in 
+                                                removeHint()
                                                 if abs(xoffset)>abs(yoffset){
                                                     if xoffset>0 && board[i][j+1] != 0{
                                                         sw(x1:i,y1:j,x2:i,y2:j+1)
@@ -360,10 +398,7 @@ struct Square_mn: View {
                                     .opacity((board[i][j] < 0 ? 0 : 1))
                                     .offset(x:CGFloat(xmove[i][j]),y:CGFloat(ymove[i][j]))
                                     .animation(.default)
-                                    .overlay(Text("\(board[i][j])"))
-                                //.animation(.easeIn,value:CGFloat(xmove[i][j]))
-                                //.animation(.easeIn,value:CGFloat(ymove[i][j]))
-                                //Text("\(board[i][j])")
+                                    .overlay(Text("\(hintEmoji[hintRecord[i][j]])"))
                             } 
                             else {
                                 RoundedRectangle(cornerRadius: 5)
@@ -374,6 +409,11 @@ struct Square_mn: View {
                     }
                 }
             }
+            Text("🎲")
+                .font(.system(size:50))
+                .onTapGesture{
+                    reGenerate()
+                }
         }
     }
 }
